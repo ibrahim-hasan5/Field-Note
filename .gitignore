@@ -1,0 +1,19 @@
+target/
+*.class
+*.jar
+*.war
+
+# Firebase service account — NEVER commit this
+src/main/resources/firebase-service-account.json
+
+# Upload directory
+uploads/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
