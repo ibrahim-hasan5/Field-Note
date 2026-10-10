@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "967982352887",
+    "project_id": "fieldnote-a42fe",
+    "storage_bucket": "fieldnote-a42fe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:967982352887:android:5bb9cd49b5e8cee70006f2",
+        "android_client_info": {
+          "package_name": "com.example.field_note"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhHl5P_9cbesxKbeITslDfR-nDdLtFUdE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
