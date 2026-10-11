@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/sites/models/site_model.dart';
 import 'database_helper.dart';
@@ -43,6 +44,24 @@ class SiteDao {
 
   Future<List<SiteModel>> getSitesForCustomer(String customerId) async {
     final db = await _dbHelper.database;
+
+    if (kIsWeb) {
+      final siteRows = await db.query(
+        'sites',
+        where: 'customer_id = ? AND deleted_at IS NULL',
+        whereArgs: [customerId],
+        orderBy: 'created_at DESC',
+      );
+      if (siteRows.isEmpty) return [];
+      final custRows = await db.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
+      final customerName = custRows.isNotEmpty ? custRows.first['name'] as String? : null;
+      return siteRows.map((r) {
+        final m = Map<String, dynamic>.from(r);
+        m['customer_name'] = customerName;
+        return SiteModel.fromMap(m);
+      }).toList();
+    }
+
     final results = await db.rawQuery('''
       SELECT s.*, c.name as customer_name
       FROM sites s
@@ -55,6 +74,39 @@ class SiteDao {
 
   Future<List<SiteModel>> getAllActiveSites() async {
     final db = await _dbHelper.database;
+
+    if (kIsWeb) {
+      final siteRows = await db.query(
+        'sites',
+        where: 'deleted_at IS NULL',
+        orderBy: 'created_at DESC',
+      );
+      if (siteRows.isEmpty) return [];
+
+      // Fetch all customers needed
+      final customerIds = siteRows
+          .map((s) => s['customer_id'] as String?)
+          .whereType<String>()
+          .toSet()
+          .toList();
+      Map<String, String?> customerNames = {};
+      if (customerIds.isNotEmpty) {
+        final placeholders = List.filled(customerIds.length, '?').join(', ');
+        final custRows = await db.query(
+          'customers',
+          where: 'id IN ($placeholders)',
+          whereArgs: customerIds,
+        );
+        customerNames = {for (final c in custRows) c['id'] as String: c['name'] as String?};
+      }
+
+      return siteRows.map((r) {
+        final m = Map<String, dynamic>.from(r);
+        m['customer_name'] = customerNames[m['customer_id']];
+        return SiteModel.fromMap(m);
+      }).toList();
+    }
+
     final results = await db.rawQuery('''
       SELECT s.*, c.name as customer_name
       FROM sites s
@@ -67,6 +119,16 @@ class SiteDao {
 
   Future<SiteModel?> getSiteById(String id) async {
     final db = await _dbHelper.database;
+
+    if (kIsWeb) {
+      final rows = await db.query('sites', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) return null;
+      final m = Map<String, dynamic>.from(rows.first);
+      final custRows = await db.query('customers', where: 'id = ?', whereArgs: [m['customer_id']], limit: 1);
+      if (custRows.isNotEmpty) m['customer_name'] = custRows.first['name'];
+      return SiteModel.fromMap(m);
+    }
+
     final results = await db.rawQuery('''
       SELECT s.*, c.name as customer_name
       FROM sites s

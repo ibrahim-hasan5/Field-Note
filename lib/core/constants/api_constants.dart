@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
-  // Default to localhost for Android emulator (10.0.2.2) or local / ngrok
-  // In development with real device: replace with machine IP (e.g. http://192.168.0.xxx:8080) or ngrok url
-  static const String baseUrl = 'http://10.0.2.2:8080/api';
+  // Use http://localhost:8080/api for Chrome/Web/Desktop, or 10.0.2.2 for Android emulator
+  static String get baseUrl => kIsWeb ? 'http://localhost:8080/api' : 'http://10.0.2.2:8080/api';
 
   // Auth
   static const String authRegister = '/auth/register';

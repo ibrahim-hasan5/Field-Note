@@ -28,9 +28,11 @@ class FieldNoteBloc extends Bloc<FieldNoteEvent, FieldNoteState> {
         refreshRemote: event.refresh,
       );
       emit(FieldNoteLoaded(notes));
-    } catch (e) {
+    } catch (e, stack) {
+      print('DEBUG ERROR in _onLoadFieldNotes: $e\n$stack');
       emit(FieldNoteError(e.toString()));
     }
+
   }
 
   Future<void> _onAddFieldNote(

@@ -66,6 +66,7 @@ class _FieldNoteListScreenState extends State<FieldNoteListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_notes',
         onPressed: () {
           Navigator.push(
             context,

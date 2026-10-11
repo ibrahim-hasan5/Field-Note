@@ -1,6 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'core/di/injection_container.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/bloc/auth_bloc.dart';
@@ -26,6 +29,11 @@ void main() async {
 
   // Initialize SharedPreferences Settings
   await SettingsRepository.init();
+
+  // Set SQLite web factory ONCE here, before any DB is opened
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  }
 
   // Initialize Dependency Injection
   await initDependencies();

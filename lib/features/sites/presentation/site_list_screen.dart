@@ -52,6 +52,7 @@ class _SiteListScreenState extends State<SiteListScreen> {
       ),
       floatingActionButton: widget.customerId != null
           ? FloatingActionButton.extended(
+              heroTag: 'fab_sites',
               onPressed: () {
                 Navigator.push(
                   context,

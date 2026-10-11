@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -154,26 +155,37 @@ class FieldNoteDetailScreen extends StatelessWidget {
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: note.photoPath != null && File(note.photoPath!).existsSync()
-                    ? Image.file(
-                        File(note.photoPath!),
-                        height: 240,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      )
-                    : (note.photoUrl != null
+                child: kIsWeb
+                    ? (note.photoPath != null
                         ? Image.network(
-                            note.photoUrl!,
+                            note.photoPath!,
                             height: 240,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              height: 140,
-                              color: Colors.grey.withOpacity(0.2),
-                              child: const Center(child: Text('Image not available')),
-                            ),
                           )
-                        : const SizedBox.shrink()),
+                        : (note.photoUrl != null
+                            ? Image.network(
+                                note.photoUrl!,
+                                height: 240,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : const SizedBox.shrink()))
+                    : (note.photoPath != null && File(note.photoPath!).existsSync()
+                        ? Image.file(
+                            File(note.photoPath!),
+                            height: 240,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          )
+                        : (note.photoUrl != null
+                            ? Image.network(
+                                note.photoUrl!,
+                                height: 240,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : const SizedBox.shrink())),
               ),
               const SizedBox(height: 20),
             ],

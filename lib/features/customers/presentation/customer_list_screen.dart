@@ -38,6 +38,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_customers',
         onPressed: () {
           Navigator.push(
             context,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/field_notes/models/field_note_model.dart';
 import 'database_helper.dart';
@@ -47,6 +48,19 @@ class FieldNoteDao {
     String? searchQuery,
   }) async {
     final db = await _dbHelper.database;
+
+    // Web (sqflite_common_ffi_web) does not support rawQuery with LEFT JOINs.
+    // Use platform-specific code paths.
+    if (kIsWeb) {
+      return _getAllActiveNotesWeb(
+        db,
+        siteId: siteId,
+        status: status,
+        searchQuery: searchQuery,
+      );
+    }
+
+    // Native: use the fast JOIN query
     final whereClauses = <String>['n.deleted_at IS NULL'];
     final whereArgs = <dynamic>[];
 
@@ -54,12 +68,10 @@ class FieldNoteDao {
       whereClauses.add('n.site_id = ?');
       whereArgs.add(siteId);
     }
-
     if (status != null && status.isNotEmpty) {
       whereClauses.add('n.status = ?');
       whereArgs.add(status);
     }
-
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       whereClauses.add('(n.title LIKE ? OR n.description LIKE ?)');
       whereArgs.add('%${searchQuery.trim()}%');
@@ -67,21 +79,120 @@ class FieldNoteDao {
     }
 
     final whereString = whereClauses.join(' AND ');
-
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT n.*, s.name as site_name, c.name as customer_name
       FROM field_notes n
       LEFT JOIN sites s ON n.site_id = s.id
       LEFT JOIN customers c ON s.customer_id = c.id
       WHERE $whereString
       ORDER BY n.note_date DESC
-    ''', whereArgs);
+      ''',
+      whereArgs.isEmpty ? null : whereArgs,
+    );
 
     return results.map((m) => FieldNoteModel.fromMap(m)).toList();
   }
 
+  /// Web-safe version: runs simple per-table queries and enriches in Dart.
+  Future<List<FieldNoteModel>> _getAllActiveNotesWeb(
+    Database db, {
+    String? siteId,
+    String? status,
+    String? searchQuery,
+  }) async {
+    // 1. Query field_notes with simple filters only
+    final whereClauses = <String>['deleted_at IS NULL'];
+    final whereArgs = <dynamic>[];
+
+    if (siteId != null && siteId.isNotEmpty) {
+      whereClauses.add('site_id = ?');
+      whereArgs.add(siteId);
+    }
+    if (status != null && status.isNotEmpty) {
+      whereClauses.add('status = ?');
+      whereArgs.add(status);
+    }
+
+    final noteRows = await db.query(
+      'field_notes',
+      where: whereClauses.join(' AND '),
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      orderBy: 'note_date DESC',
+    );
+
+    if (noteRows.isEmpty) return [];
+
+    // 2. Collect unique site_ids and fetch sites
+    final siteIds = noteRows.map((r) => r['site_id'] as String).toSet().toList();
+    final sitePlaceholders = List.filled(siteIds.length, '?').join(', ');
+    final siteRows = await db.query(
+      'sites',
+      where: 'id IN ($sitePlaceholders)',
+      whereArgs: siteIds,
+    );
+    final siteMap = {for (final s in siteRows) s['id'] as String: s};
+
+    // 3. Collect unique customer_ids and fetch customers
+    final customerIds = siteRows
+        .map((s) => s['customer_id'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    Map<String, Map<String, Object?>> customerMap = {};
+    if (customerIds.isNotEmpty) {
+      final custPlaceholders = List.filled(customerIds.length, '?').join(', ');
+      final customerRows = await db.query(
+        'customers',
+        where: 'id IN ($custPlaceholders)',
+        whereArgs: customerIds,
+      );
+      customerMap = {for (final c in customerRows) c['id'] as String: c};
+    }
+
+    // 4. Enrich notes with site_name and customer_name in Dart
+    final enriched = noteRows.map((noteRow) {
+      final mutable = Map<String, dynamic>.from(noteRow);
+      final site = siteMap[mutable['site_id']];
+      if (site != null) {
+        mutable['site_name'] = site['name'];
+        final customer = customerMap[site['customer_id']];
+        if (customer != null) {
+          mutable['customer_name'] = customer['name'];
+        }
+      }
+      return FieldNoteModel.fromMap(mutable);
+    }).toList();
+
+    // 5. Apply search filter in Dart (since LIKE across columns is tricky on web)
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.trim().toLowerCase();
+      return enriched
+          .where((n) =>
+              n.title.toLowerCase().contains(q) ||
+              (n.description?.toLowerCase().contains(q) ?? false))
+          .toList();
+    }
+
+    return enriched;
+  }
+
   Future<FieldNoteModel?> getNoteById(String id) async {
     final db = await _dbHelper.database;
+
+    if (kIsWeb) {
+      final rows = await db.query('field_notes', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) return null;
+      final mutable = Map<String, dynamic>.from(rows.first);
+      final siteRows = await db.query('sites', where: 'id = ?', whereArgs: [mutable['site_id']], limit: 1);
+      if (siteRows.isNotEmpty) {
+        mutable['site_name'] = siteRows.first['name'];
+        final custRows = await db.query('customers', where: 'id = ?', whereArgs: [siteRows.first['customer_id']], limit: 1);
+        if (custRows.isNotEmpty) mutable['customer_name'] = custRows.first['name'];
+      }
+      return FieldNoteModel.fromMap(mutable);
+    }
+
     final results = await db.rawQuery('''
       SELECT n.*, s.name as site_name, c.name as customer_name
       FROM field_notes n
