@@ -6,6 +6,7 @@ import '../database/site_dao.dart';
 import '../network/api_client.dart';
 import '../services/connectivity_service.dart';
 import '../services/location_service.dart';
+import '../services/sync_engine.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/customers/data/customer_remote_data_source.dart';
 import '../../features/customers/data/customer_repository.dart';
@@ -56,4 +57,14 @@ Future<void> initDependencies() async {
         connectivityService: sl(),
       ));
   sl.registerLazySingleton<SettingsRepository>(() => SettingsRepository.instance);
+
+  // Sync Engine
+  sl.registerLazySingleton<SyncEngine>(() => SyncEngine(
+        apiClient: sl(),
+        connectivityService: sl(),
+        customerDao: sl(),
+        siteDao: sl(),
+        noteDao: sl(),
+        noteRemoteSource: sl(),
+      ));
 }

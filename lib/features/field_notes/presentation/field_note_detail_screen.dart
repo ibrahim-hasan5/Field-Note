@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/services/pdf_export_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../bloc/field_note_bloc.dart';
 import '../bloc/field_note_event.dart';
 import '../models/field_note_model.dart';
 import 'field_note_form_screen.dart';
+import 'note_map_screen.dart';
 
 class FieldNoteDetailScreen extends StatelessWidget {
   final FieldNoteModel note;
@@ -36,6 +38,39 @@ class FieldNoteDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Field Note Details'),
         actions: [
+          // Map view (only if GPS data present)
+          if (note.latitude != null && note.longitude != null)
+            IconButton(
+              icon: const Icon(Icons.map_outlined),
+              tooltip: 'View on map',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NoteMapScreen(note: note),
+                  ),
+                );
+              },
+            ),
+          // PDF Export
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Export PDF',
+            onPressed: () async {
+              try {
+                await PdfExportService.exportAndShare(note);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('PDF export failed: $e'),
+                      backgroundColor: AppColors.syncError,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             onPressed: () {
@@ -239,7 +274,16 @@ class FieldNoteDetailScreen extends StatelessWidget {
                     '${note.latitude!.toStringAsFixed(6)}, ${note.longitude!.toStringAsFixed(6)}',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                  subtitle: const Text('Exact field coordinates logged upon creation'),
+                  subtitle: const Text('Tap to open full map view'),
+                  trailing: const Icon(Icons.open_in_new, color: AppColors.primary, size: 20),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NoteMapScreen(note: note),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 20),
