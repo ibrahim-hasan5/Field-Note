@@ -25,19 +25,24 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
     _mapController = MapController();
   }
 
+  /// Returns the colour associated with the given note status.
+  Color _getStatusColor(String s) {
+    switch (s) {
+      case 'COMPLETED':
+        return AppColors.statusCompleted;
+      case 'IN_PROGRESS':
+        return AppColors.statusInProgress;
+      default:
+        return AppColors.statusDraft;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lat = widget.note.latitude!;
     final lng = widget.note.longitude!;
     final center = LatLng(lat, lng);
-
-    Color statusColor(String s) {
-      switch (s) {
-        case 'COMPLETED': return AppColors.statusCompleted;
-        case 'IN_PROGRESS': return AppColors.statusInProgress;
-        default: return AppColors.statusDraft;
-      }
-    }
+    final pinColor = _getStatusColor(widget.note.status);
 
     return Scaffold(
       appBar: AppBar(
@@ -83,7 +88,7 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                     width: 60,
                     height: 60,
                     child: GestureDetector(
-                      onTap: () => _showNotePopup(context, _statusColor(widget.note.status)),
+                      onTap: () => _showNotePopup(context, pinColor),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -93,7 +98,7 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                             height: 44,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.primary.withOpacity(0.18),
+                              color: AppColors.primary.withValues(alpha: 0.18),
                             ),
                           ),
                           // Pin icon
@@ -101,11 +106,11 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: _statusColor(widget.note.status),
+                              color: pinColor,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: _statusColor(widget.note.status).withOpacity(0.4),
+                                  color: pinColor.withValues(alpha: 0.4),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
                                 ),
@@ -146,7 +151,7 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: _statusColor(widget.note.status).withOpacity(0.12),
+                            color: pinColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -154,7 +159,7 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
-                              color: _statusColor(widget.note.status),
+                              color: pinColor,
                             ),
                           ),
                         ),
@@ -244,7 +249,7 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
     );
   }
 
-  void _showNotePopup(BuildContext context, Color statusColor) {
+  void _showNotePopup(BuildContext context, Color pinColor) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -274,12 +279,12 @@ class _NoteMapScreenState extends State<NoteMapScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
+                    color: pinColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(widget.note.status,
                       style: TextStyle(
-                          color: statusColor,
+                          color: pinColor,
                           fontWeight: FontWeight.w700,
                           fontSize: 12)),
                 ),
