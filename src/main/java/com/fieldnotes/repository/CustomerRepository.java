@@ -28,4 +28,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     // For initial full pull (no since filter)
     @Query("SELECT c FROM Customer c WHERE c.user.id = :userId")
     List<Customer> findAllByUserId(@Param("userId") UUID userId);
+
+    // For push sync upsert (any state, including soft-deleted)
+    @Query("SELECT c FROM Customer c WHERE c.id = :id AND c.user.id = :userId")
+    Optional<Customer> findByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
 }

@@ -86,4 +86,8 @@ public interface FieldNoteRepository extends JpaRepository<FieldNote, UUID> {
     // Full pull
     @Query("SELECT fn FROM FieldNote fn JOIN FETCH fn.site s JOIN FETCH s.customer WHERE fn.user.id = :userId")
     List<FieldNote> findAllByUserId(@Param("userId") UUID userId);
+
+    // For push sync upsert
+    @Query("SELECT fn FROM FieldNote fn JOIN FETCH fn.site s JOIN FETCH s.customer WHERE fn.id = :id AND fn.user.id = :userId")
+    Optional<FieldNote> findByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
 }

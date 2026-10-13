@@ -35,4 +35,8 @@ public interface SiteRepository extends JpaRepository<Site, UUID> {
     // Full pull
     @Query("SELECT s FROM Site s JOIN FETCH s.customer WHERE s.user.id = :userId")
     List<Site> findAllByUserId(@Param("userId") UUID userId);
+
+    // For push sync upsert
+    @Query("SELECT s FROM Site s JOIN FETCH s.customer WHERE s.id = :id AND s.user.id = :userId")
+    Optional<Site> findByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
 }

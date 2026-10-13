@@ -1,10 +1,10 @@
 package com.fieldnotes.controller;
 
+import com.fieldnotes.dto.request.SyncPushRequest;
 import com.fieldnotes.entity.User;
 import com.fieldnotes.security.FirebaseUserDetails;
 import com.fieldnotes.service.AuthService;
 import com.fieldnotes.service.SyncService;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -34,5 +34,19 @@ public class SyncController {
             @AuthenticationPrincipal FirebaseUserDetails principal) {
         User user = authService.getByFirebaseUid(principal.getUid());
         return ResponseEntity.ok(syncService.pull(user, since));
+    }
+
+    /**
+     * Push locally-created/updated records to the server.
+     *
+     * POST /api/sync/push
+     * Body: { customers:[...], sites:[...], notes:[...] }
+     */
+    @PostMapping("/push")
+    public ResponseEntity<SyncService.SyncPushResponse> push(
+            @RequestBody SyncPushRequest req,
+            @AuthenticationPrincipal FirebaseUserDetails principal) {
+        User user = authService.getByFirebaseUid(principal.getUid());
+        return ResponseEntity.ok(syncService.push(user, req));
     }
 }
