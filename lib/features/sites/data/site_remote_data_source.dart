@@ -9,10 +9,15 @@ class SiteRemoteDataSource {
       : _apiClient = apiClient;
 
   Future<List<SiteModel>> getSites({String? customerId}) async {
-    final url = customerId != null
-        ? '${ApiConstants.customers}/$customerId/sites'
-        : ApiConstants.sites;
-    final response = await _apiClient.dio.get(url);
+    final url = ApiConstants.sites;
+    final queryParameters = <String, dynamic>{};
+    if (customerId != null && customerId.isNotEmpty) {
+      queryParameters['customerId'] = customerId;
+    }
+    final response = await _apiClient.dio.get(
+      url,
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
     final data = response.data;
     List list = [];
     if (data is Map && data.containsKey('content')) {

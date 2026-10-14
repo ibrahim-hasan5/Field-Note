@@ -17,8 +17,10 @@ class CustomerRepository {
         _connectivityService = connectivityService;
 
   Future<List<CustomerModel>> getCustomers({bool refreshRemote = false}) async {
-    // Return local first
-    final localList = await _customerDao.getAllActiveCustomers();
+    var localList = <CustomerModel>[];
+    try {
+      localList = await _customerDao.getAllActiveCustomers();
+    } catch (_) {}
 
     if (refreshRemote || localList.isEmpty) {
       final isOnline = await _connectivityService.isOnline;
@@ -26,9 +28,15 @@ class CustomerRepository {
         try {
           final remoteList = await _remoteDataSource.getCustomers();
           for (final c in remoteList) {
-            await _customerDao.insertCustomer(c.copyWith(syncStatus: 'synced'));
+            try {
+              await _customerDao.insertCustomer(c.copyWith(syncStatus: 'synced'));
+            } catch (_) {}
           }
-          return await _customerDao.getAllActiveCustomers();
+          try {
+            return await _customerDao.getAllActiveCustomers();
+          } catch (_) {
+            return remoteList;
+          }
         } catch (e) {
           // If remote fails, local is returned
         }

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/customers/models/customer_model.dart';
 import 'database_helper.dart';
+import 'sqlite_compat.dart';
 
 class CustomerDao {
   final DatabaseHelper _dbHelper;
@@ -12,7 +14,7 @@ class CustomerDao {
     final db = await _dbHelper.database;
     await db.insert(
       'customers',
-      customer.toMap(),
+      sqliteWriteMap(customer.toMap()),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -21,7 +23,7 @@ class CustomerDao {
     final db = await _dbHelper.database;
     await db.update(
       'customers',
-      customer.toMap(),
+      sqliteWriteMap(customer.toMap()),
       where: 'id = ?',
       whereArgs: [customer.id],
     );
@@ -43,6 +45,15 @@ class CustomerDao {
 
   Future<List<CustomerModel>> getAllActiveCustomers() async {
     final db = await _dbHelper.database;
+    if (kIsWeb) {
+      final results = await db.query('customers');
+      final active = results
+          .where((row) => !sqliteRowIsDeleted(row))
+          .map((m) => CustomerModel.fromMap(Map<String, dynamic>.from(m)))
+          .toList();
+      active.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return active;
+    }
     final results = await db.query(
       'customers',
       where: 'deleted_at IS NULL',
@@ -53,6 +64,13 @@ class CustomerDao {
 
   Future<CustomerModel?> getCustomerById(String id) async {
     final db = await _dbHelper.database;
+    if (kIsWeb) {
+      final results = (await db.query('customers'))
+          .where((row) => sqliteRequiredString(row['id']) == id)
+          .toList();
+      if (results.isEmpty) return null;
+      return CustomerModel.fromMap(Map<String, dynamic>.from(results.first));
+    }
     final results = await db.query(
       'customers',
       where: 'id = ?',

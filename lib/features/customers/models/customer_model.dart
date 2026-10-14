@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../core/database/sqlite_compat.dart';
 
 class CustomerModel extends Equatable {
   final String id;
@@ -63,15 +64,15 @@ class CustomerModel extends Equatable {
 
   factory CustomerModel.fromMap(Map<String, dynamic> map) {
     return CustomerModel(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      phone: map['phone'] as String?,
-      email: map['email'] as String?,
-      address: map['address'] as String?,
-      createdAt: map['created_at'] as String,
-      updatedAt: map['updated_at'] as String,
-      deletedAt: map['deleted_at'] as String?,
-      syncStatus: (map['sync_status'] as String?) ?? 'pending',
+      id: sqliteRequiredString(map['id']),
+      name: sqliteRequiredString(map['name']),
+      phone: sqliteString(map['phone']),
+      email: sqliteString(map['email']),
+      address: sqliteString(map['address']),
+      createdAt: sqliteRequiredString(map['created_at']),
+      updatedAt: sqliteRequiredString(map['updated_at']),
+      deletedAt: sqliteString(map['deleted_at']),
+      syncStatus: sqliteString(map['sync_status']) ?? 'pending',
     );
   }
 

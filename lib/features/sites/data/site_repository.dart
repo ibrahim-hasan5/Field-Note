@@ -17,9 +17,14 @@ class SiteRepository {
         _connectivityService = connectivityService;
 
   Future<List<SiteModel>> getSites({String? customerId, bool refreshRemote = false}) async {
-    final localList = customerId != null
-        ? await _siteDao.getSitesForCustomer(customerId)
-        : await _siteDao.getAllActiveSites();
+    Future<List<SiteModel>> readLocal() => customerId != null
+        ? _siteDao.getSitesForCustomer(customerId)
+        : _siteDao.getAllActiveSites();
+
+    var localList = <SiteModel>[];
+    try {
+      localList = await readLocal();
+    } catch (_) {}
 
     if (refreshRemote || localList.isEmpty) {
       final isOnline = await _connectivityService.isOnline;
@@ -27,11 +32,15 @@ class SiteRepository {
         try {
           final remoteList = await _remoteDataSource.getSites(customerId: customerId);
           for (final s in remoteList) {
-            await _siteDao.insertSite(s.copyWith(syncStatus: 'synced'));
+            try {
+              await _siteDao.insertSite(s.copyWith(syncStatus: 'synced'));
+            } catch (_) {}
           }
-          return customerId != null
-              ? await _siteDao.getSitesForCustomer(customerId)
-              : await _siteDao.getAllActiveSites();
+          try {
+            return await readLocal();
+          } catch (_) {
+            return remoteList;
+          }
         } catch (e) {
           // Keep local
         }

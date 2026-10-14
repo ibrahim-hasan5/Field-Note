@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/field_notes/models/field_note_model.dart';
 import 'database_helper.dart';
+import 'sqlite_compat.dart';
 
 class FieldNoteDao {
   final DatabaseHelper _dbHelper;
@@ -13,7 +14,7 @@ class FieldNoteDao {
     final db = await _dbHelper.database;
     await db.insert(
       'field_notes',
-      note.toMap(),
+      sqliteWriteMap(note.toMap()),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -22,7 +23,7 @@ class FieldNoteDao {
     final db = await _dbHelper.database;
     await db.update(
       'field_notes',
-      note.toMap(),
+      sqliteWriteMap(note.toMap()),
       where: 'id = ?',
       whereArgs: [note.id],
     );
@@ -94,69 +95,30 @@ class FieldNoteDao {
     return results.map((m) => FieldNoteModel.fromMap(m)).toList();
   }
 
-  /// Web-safe version: runs simple per-table queries and enriches in Dart.
+  /// Web-safe version: table scans + Dart filters (no IS NULL / IN / LIMIT).
   Future<List<FieldNoteModel>> _getAllActiveNotesWeb(
     Database db, {
     String? siteId,
     String? status,
     String? searchQuery,
   }) async {
-    // 1. Query field_notes with simple filters only
-    final whereClauses = <String>['deleted_at IS NULL'];
-    final whereArgs = <dynamic>[];
+    final noteRows = await db.query('field_notes');
+    final siteRows = await db.query('sites');
+    final customerRows = await db.query('customers');
 
-    if (siteId != null && siteId.isNotEmpty) {
-      whereClauses.add('site_id = ?');
-      whereArgs.add(siteId);
-    }
-    if (status != null && status.isNotEmpty) {
-      whereClauses.add('status = ?');
-      whereArgs.add(status);
-    }
+    final siteMap = {
+      for (final s in siteRows) sqliteRequiredString(s['id']): s,
+    };
+    final customerMap = {
+      for (final c in customerRows) sqliteRequiredString(c['id']): c,
+    };
 
-    final noteRows = await db.query(
-      'field_notes',
-      where: whereClauses.join(' AND '),
-      whereArgs: whereArgs.isEmpty ? null : whereArgs,
-      orderBy: 'note_date DESC',
-    );
-
-    if (noteRows.isEmpty) return [];
-
-    // 2. Collect unique site_ids and fetch sites
-    final siteIds = noteRows.map((r) => r['site_id'] as String).toSet().toList();
-    final sitePlaceholders = List.filled(siteIds.length, '?').join(', ');
-    final siteRows = await db.query(
-      'sites',
-      where: 'id IN ($sitePlaceholders)',
-      whereArgs: siteIds,
-    );
-    final siteMap = {for (final s in siteRows) s['id'] as String: s};
-
-    // 3. Collect unique customer_ids and fetch customers
-    final customerIds = siteRows
-        .map((s) => s['customer_id'] as String?)
-        .whereType<String>()
-        .toSet()
-        .toList();
-    Map<String, Map<String, Object?>> customerMap = {};
-    if (customerIds.isNotEmpty) {
-      final custPlaceholders = List.filled(customerIds.length, '?').join(', ');
-      final customerRows = await db.query(
-        'customers',
-        where: 'id IN ($custPlaceholders)',
-        whereArgs: customerIds,
-      );
-      customerMap = {for (final c in customerRows) c['id'] as String: c};
-    }
-
-    // 4. Enrich notes with site_name and customer_name in Dart
-    final enriched = noteRows.map((noteRow) {
+    var notes = noteRows.where((row) => !sqliteRowIsDeleted(row)).map((noteRow) {
       final mutable = Map<String, dynamic>.from(noteRow);
-      final site = siteMap[mutable['site_id']];
+      final site = siteMap[sqliteRequiredString(mutable['site_id'])];
       if (site != null) {
         mutable['site_name'] = site['name'];
-        final customer = customerMap[site['customer_id']];
+        final customer = customerMap[sqliteRequiredString(site['customer_id'])];
         if (customer != null) {
           mutable['customer_name'] = customer['name'];
         }
@@ -164,31 +126,47 @@ class FieldNoteDao {
       return FieldNoteModel.fromMap(mutable);
     }).toList();
 
-    // 5. Apply search filter in Dart (since LIKE across columns is tricky on web)
+    if (siteId != null && siteId.isNotEmpty) {
+      notes = notes.where((n) => n.siteId == siteId).toList();
+    }
+    if (status != null && status.isNotEmpty) {
+      notes = notes.where((n) => n.status == status).toList();
+    }
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final q = searchQuery.trim().toLowerCase();
-      return enriched
+      notes = notes
           .where((n) =>
               n.title.toLowerCase().contains(q) ||
               (n.description?.toLowerCase().contains(q) ?? false))
           .toList();
     }
 
-    return enriched;
+    notes.sort((a, b) => b.noteDate.compareTo(a.noteDate));
+    return notes;
   }
 
   Future<FieldNoteModel?> getNoteById(String id) async {
     final db = await _dbHelper.database;
 
     if (kIsWeb) {
-      final rows = await db.query('field_notes', where: 'id = ?', whereArgs: [id], limit: 1);
+      final rows = (await db.query('field_notes'))
+          .where((r) => sqliteRequiredString(r['id']) == id)
+          .toList();
       if (rows.isEmpty) return null;
       final mutable = Map<String, dynamic>.from(rows.first);
-      final siteRows = await db.query('sites', where: 'id = ?', whereArgs: [mutable['site_id']], limit: 1);
+      final siteId = sqliteRequiredString(mutable['site_id']);
+      final siteRows = (await db.query('sites'))
+          .where((r) => sqliteRequiredString(r['id']) == siteId)
+          .toList();
       if (siteRows.isNotEmpty) {
         mutable['site_name'] = siteRows.first['name'];
-        final custRows = await db.query('customers', where: 'id = ?', whereArgs: [siteRows.first['customer_id']], limit: 1);
-        if (custRows.isNotEmpty) mutable['customer_name'] = custRows.first['name'];
+        final customerId = sqliteRequiredString(siteRows.first['customer_id']);
+        final custRows = (await db.query('customers'))
+            .where((r) => sqliteRequiredString(r['id']) == customerId)
+            .toList();
+        if (custRows.isNotEmpty) {
+          mutable['customer_name'] = custRows.first['name'];
+        }
       }
       return FieldNoteModel.fromMap(mutable);
     }

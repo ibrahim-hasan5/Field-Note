@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../core/database/sqlite_compat.dart';
 
 class FieldNoteModel extends Equatable {
   final String id;
@@ -96,22 +97,22 @@ class FieldNoteModel extends Equatable {
 
   factory FieldNoteModel.fromMap(Map<String, dynamic> map) {
     return FieldNoteModel(
-      id: map['id'] as String,
-      siteId: map['site_id'] as String,
-      siteName: map['site_name'] as String?,
-      customerName: map['customer_name'] as String?,
-      title: map['title'] as String,
-      description: map['description'] as String?,
-      latitude: (map['latitude'] as num?)?.toDouble(),
-      longitude: (map['longitude'] as num?)?.toDouble(),
-      noteDate: map['note_date'] as String,
-      status: (map['status'] as String?) ?? 'DRAFT',
-      photoPath: map['photo_path'] as String?,
-      photoUrl: map['photo_url'] as String?,
-      createdAt: map['created_at'] as String,
-      updatedAt: map['updated_at'] as String,
-      deletedAt: map['deleted_at'] as String?,
-      syncStatus: (map['sync_status'] as String?) ?? 'pending',
+      id: sqliteRequiredString(map['id']),
+      siteId: sqliteRequiredString(map['site_id']),
+      siteName: sqliteString(map['site_name']),
+      customerName: sqliteString(map['customer_name']),
+      title: sqliteRequiredString(map['title']),
+      description: sqliteString(map['description']),
+      latitude: sqliteDouble(map['latitude']),
+      longitude: sqliteDouble(map['longitude']),
+      noteDate: sqliteRequiredString(map['note_date']),
+      status: sqliteString(map['status']) ?? 'DRAFT',
+      photoPath: sqliteString(map['photo_path']),
+      photoUrl: sqliteString(map['photo_url']),
+      createdAt: sqliteRequiredString(map['created_at']),
+      updatedAt: sqliteRequiredString(map['updated_at']),
+      deletedAt: sqliteString(map['deleted_at']),
+      syncStatus: sqliteString(map['sync_status']) ?? 'pending',
     );
   }
 

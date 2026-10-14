@@ -22,11 +22,16 @@ class FieldNoteRepository {
     String? searchQuery,
     bool refreshRemote = false,
   }) async {
-    final localList = await _noteDao.getAllActiveNotes(
-      siteId: siteId,
-      status: status,
-      searchQuery: searchQuery,
-    );
+    var localList = <FieldNoteModel>[];
+    try {
+      localList = await _noteDao.getAllActiveNotes(
+        siteId: siteId,
+        status: status,
+        searchQuery: searchQuery,
+      );
+    } catch (_) {
+      // Web SQLite can fail on NULL cells; still try the API below.
+    }
 
     if (refreshRemote || localList.isEmpty) {
       final isOnline = await _connectivityService.isOnline;
@@ -38,13 +43,19 @@ class FieldNoteRepository {
             query: searchQuery,
           );
           for (final note in remoteList) {
-            await _noteDao.insertNote(note.copyWith(syncStatus: 'synced'));
+            try {
+              await _noteDao.insertNote(note.copyWith(syncStatus: 'synced'));
+            } catch (_) {}
           }
-          return await _noteDao.getAllActiveNotes(
-            siteId: siteId,
-            status: status,
-            searchQuery: searchQuery,
-          );
+          try {
+            return await _noteDao.getAllActiveNotes(
+              siteId: siteId,
+              status: status,
+              searchQuery: searchQuery,
+            );
+          } catch (_) {
+            return remoteList;
+          }
         } catch (e) {
           // Local fallback
         }

@@ -7,7 +7,7 @@ class DatabaseHelper {
   static Database? _database;
 
   // Bump version whenever schema changes — forces onUpgrade on existing DBs
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
 
   DatabaseHelper._internal();
 

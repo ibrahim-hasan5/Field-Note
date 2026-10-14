@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/sites/models/site_model.dart';
 import 'database_helper.dart';
+import 'sqlite_compat.dart';
 
 class SiteDao {
   final DatabaseHelper _dbHelper;
@@ -13,7 +14,7 @@ class SiteDao {
     final db = await _dbHelper.database;
     await db.insert(
       'sites',
-      site.toMap(),
+      sqliteWriteMap(site.toMap()),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -22,7 +23,7 @@ class SiteDao {
     final db = await _dbHelper.database;
     await db.update(
       'sites',
-      site.toMap(),
+      sqliteWriteMap(site.toMap()),
       where: 'id = ?',
       whereArgs: [site.id],
     );
@@ -46,20 +47,23 @@ class SiteDao {
     final db = await _dbHelper.database;
 
     if (kIsWeb) {
-      final siteRows = await db.query(
-        'sites',
-        where: 'customer_id = ? AND deleted_at IS NULL',
-        whereArgs: [customerId],
-        orderBy: 'created_at DESC',
-      );
-      if (siteRows.isEmpty) return [];
-      final custRows = await db.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
-      final customerName = custRows.isNotEmpty ? custRows.first['name'] as String? : null;
-      return siteRows.map((r) {
-        final m = Map<String, dynamic>.from(r);
-        m['customer_name'] = customerName;
-        return SiteModel.fromMap(m);
-      }).toList();
+      final customerRows = (await db.query('customers'))
+          .where((r) => sqliteRequiredString(r['id']) == customerId)
+          .toList();
+      final customerName =
+          customerRows.isNotEmpty ? sqliteString(customerRows.first['name']) : null;
+      final sites = (await db.query('sites'))
+          .where((r) =>
+              sqliteRequiredString(r['customer_id']) == customerId &&
+              !sqliteRowIsDeleted(r))
+          .map((r) {
+            final m = Map<String, dynamic>.from(r);
+            m['customer_name'] = customerName;
+            return SiteModel.fromMap(m);
+          })
+          .toList();
+      sites.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return sites;
     }
 
     final results = await db.rawQuery('''
@@ -76,35 +80,22 @@ class SiteDao {
     final db = await _dbHelper.database;
 
     if (kIsWeb) {
-      final siteRows = await db.query(
-        'sites',
-        where: 'deleted_at IS NULL',
-        orderBy: 'created_at DESC',
-      );
-      if (siteRows.isEmpty) return [];
-
-      // Fetch all customers needed
-      final customerIds = siteRows
-          .map((s) => s['customer_id'] as String?)
-          .whereType<String>()
-          .toSet()
+      final siteRows = await db.query('sites');
+      final custRows = await db.query('customers');
+      final customerNames = {
+        for (final c in custRows)
+          sqliteRequiredString(c['id']): sqliteString(c['name']),
+      };
+      final sites = siteRows
+          .where((r) => !sqliteRowIsDeleted(r))
+          .map((r) {
+            final m = Map<String, dynamic>.from(r);
+            m['customer_name'] = customerNames[sqliteRequiredString(m['customer_id'])];
+            return SiteModel.fromMap(m);
+          })
           .toList();
-      Map<String, String?> customerNames = {};
-      if (customerIds.isNotEmpty) {
-        final placeholders = List.filled(customerIds.length, '?').join(', ');
-        final custRows = await db.query(
-          'customers',
-          where: 'id IN ($placeholders)',
-          whereArgs: customerIds,
-        );
-        customerNames = {for (final c in custRows) c['id'] as String: c['name'] as String?};
-      }
-
-      return siteRows.map((r) {
-        final m = Map<String, dynamic>.from(r);
-        m['customer_name'] = customerNames[m['customer_id']];
-        return SiteModel.fromMap(m);
-      }).toList();
+      sites.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return sites;
     }
 
     final results = await db.rawQuery('''
@@ -121,10 +112,15 @@ class SiteDao {
     final db = await _dbHelper.database;
 
     if (kIsWeb) {
-      final rows = await db.query('sites', where: 'id = ?', whereArgs: [id], limit: 1);
+      final rows = (await db.query('sites'))
+          .where((r) => sqliteRequiredString(r['id']) == id)
+          .toList();
       if (rows.isEmpty) return null;
       final m = Map<String, dynamic>.from(rows.first);
-      final custRows = await db.query('customers', where: 'id = ?', whereArgs: [m['customer_id']], limit: 1);
+      final customerId = sqliteRequiredString(m['customer_id']);
+      final custRows = (await db.query('customers'))
+          .where((r) => sqliteRequiredString(r['id']) == customerId)
+          .toList();
       if (custRows.isNotEmpty) m['customer_name'] = custRows.first['name'];
       return SiteModel.fromMap(m);
     }

@@ -9,6 +9,10 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../settings/data/settings_repository.dart';
+import '../../sites/bloc/site_bloc.dart';
+import '../../sites/bloc/site_event.dart';
+import '../../sites/bloc/site_state.dart';
+import '../../sites/models/site_model.dart';
 import '../bloc/field_note_bloc.dart';
 import '../bloc/field_note_event.dart';
 import '../models/field_note_model.dart';
@@ -42,6 +46,9 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
   double? _latitude;
   double? _longitude;
   String? _photoPath;
+  String? _selectedSiteId;
+  String? _selectedSiteName;
+  List<SiteModel> _sites = [];
   bool _isGettingLocation = false;
 
   @override
@@ -58,11 +65,16 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
     _status = widget.note?.status ?? defaultStatus;
     _latitude = widget.note?.latitude;
     _longitude = widget.note?.longitude;
-    _photoPath = widget.note?.photoPath;
+    _photoPath = widget.note?.photoPath ?? widget.note?.photoUrl;
+    _selectedSiteId = widget.siteId.isNotEmpty ? widget.siteId : widget.note?.siteId;
+    _selectedSiteName = widget.siteName ?? widget.note?.siteName;
 
     if (widget.note == null) {
       _fetchLocation();
     }
+
+    // Ensure sites are available for the optional site picker (used on dashboard).
+    context.read<SiteBloc>().add(const LoadSites());
   }
 
   @override
@@ -106,20 +118,30 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
   }
 
   void _save() {
+    final effectiveSiteId = (_selectedSiteId ?? widget.siteId).trim();
+    final effectiveSiteName = _selectedSiteName ?? widget.siteName;
+
+    if (effectiveSiteId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a site first.')),
+      );
+      return;
+    }
+
     if (_formKey.currentState?.validate() ?? false) {
       final now = DateTime.now().toIso8601String();
       if (widget.note == null) {
         final newNote = FieldNoteModel(
           id: const Uuid().v4(),
-          siteId: widget.siteId,
-          siteName: widget.siteName,
+          siteId: effectiveSiteId,
+          siteName: effectiveSiteName,
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim().isEmpty
               ? null
               : _descriptionController.text.trim(),
           latitude: _latitude,
           longitude: _longitude,
-          noteDate: _selectedDate.toIso8601String(),
+          noteDate: _selectedDate.toUtc().toIso8601String(),
           status: _status,
           photoPath: _photoPath,
           createdAt: now,
@@ -135,7 +157,7 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
               : _descriptionController.text.trim(),
           latitude: _latitude,
           longitude: _longitude,
-          noteDate: _selectedDate.toIso8601String(),
+          noteDate: _selectedDate.toUtc().toIso8601String(),
           status: _status,
           photoPath: _photoPath,
           updatedAt: now,
@@ -163,6 +185,55 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.siteId.isEmpty)
+                  BlocListener<SiteBloc, SiteState>(
+                    listener: (context, state) {
+                      if (state is SiteLoaded) {
+                        setState(() {
+                          _sites = state.sites;
+                          _selectedSiteId ??= state.sites.isNotEmpty ? state.sites.first.id : null;
+                          _selectedSiteName ??= state.sites.isNotEmpty ? state.sites.first.name : null;
+                        });
+                      }
+                    },
+                    child: const SizedBox.shrink(),
+                  ),
+                if (widget.siteId.isEmpty) ...[
+                  Text(
+                    'Site *',
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  if (_sites.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('Loading sites...'),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      value: _selectedSiteId,
+                      items: _sites
+                          .map((s) => DropdownMenuItem<String>(
+                                value: s.id,
+                                child: Text(s.name),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val == null) return;
+                        final site = _sites.firstWhere((s) => s.id == val);
+                        setState(() {
+                          _selectedSiteId = val;
+                          _selectedSiteName = site.name;
+                        });
+                      },
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? 'Site is required' : null,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.location_city_outlined),
+                      ),
+                    ),
+                  const SizedBox(height: 18),
+                ],
                 if (widget.siteName != null) ...[
                   Text(
                     'Site: ${widget.siteName}',
@@ -334,7 +405,7 @@ class _FieldNoteFormScreenState extends State<FieldNoteFormScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(14),
-                        child: kIsWeb
+                        child: (kIsWeb || (_photoPath?.startsWith('http') ?? false))
                             ? Image.network(
                                 _photoPath!,
                                 height: 200,
